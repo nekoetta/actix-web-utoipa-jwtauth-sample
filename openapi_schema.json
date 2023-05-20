@@ -1,0 +1,404 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "rust_api",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/customers/categories": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "operationId": "categories",
+        "responses": {
+          "200": {
+            "description": "customer category list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomerCategory"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid authorization token"
+          },
+          "500": {
+            "description": "failed to get customer categories"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "operationId": "insert_category",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewCategoryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "customer category insert successfully"
+          },
+          "400": {
+            "description": "validation error"
+          },
+          "401": {
+            "description": "invalid authorization token"
+          },
+          "500": {
+            "description": "failed to insert customer category"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/customers/categories/{id}": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "operationId": "get_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "customer category detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCategory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid authorization token"
+          },
+          "500": {
+            "description": "failed to get category detail"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/customers/categories/{id}/delete": {
+      "delete": {
+        "tags": [
+          "customers"
+        ],
+        "operationId": "delete_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "delete customer category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCategory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid authorization token"
+          },
+          "500": {
+            "description": "failed to delete customer category"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/customers/categories/{id}/edit": {
+      "put": {
+        "tags": [
+          "customers"
+        ],
+        "operationId": "update_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewCategoryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "customer category update successfully"
+          },
+          "400": {
+            "description": "validation error"
+          },
+          "401": {
+            "description": "invalid authorization token"
+          },
+          "500": {
+            "description": "failed to update customer category"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users/": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "operationId": "index",
+        "responses": {
+          "200": {
+            "description": "Register User",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Register User Failed"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInfo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login User",
+            "headers": {
+              "authorization": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Authorization Header"
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "500": {
+            "description": "Login User Failed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CustomerCategory": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginInfo": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "NewCategoryBody": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "NewUser": {
+        "type": "object",
+        "required": [
+          "login_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "employee_number": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "gecos": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "login_id": {
+            "type": "string"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "login_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "employee_number": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "gecos": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "login_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
