@@ -1,20 +1,17 @@
 use actix_web::{get, web, HttpResponse, Responder, error};
-use crate::{DbPool, middleware::ApiReqeustData, models::users::User};
-
-const API_PREFIX: &str = "/users";
-const _API_TAG: &str = "users"; // TODO
+use crate::{DbPool, middleware::ApiReqeustData, models::users::User, constants};
 
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope(API_PREFIX)
+        web::scope(constants::paths::USERS)
         .service(index)
     );
 }
 
 #[utoipa::path(
     get,
-    tag = "users", // TODO
-    context_path = "/api/users", // TODO
+    tag = constants::tags::USERS,
+    context_path = "/api/users",
     responses(
         (status = 200, description = "Register User", body = Vec<User>),
         (status = INTERNAL_SERVER_ERROR, description = "Register User Failed")
@@ -33,8 +30,9 @@ pub async fn index(
 
     dbg!(req_data); // current_user 使用例
 
-    let users = web::block(move || {
-        let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let users = web::block(move || -> Result<Vec<User>, diesel::result::Error> {
+        let mut conn = pool.get()
+            .map_err(|_| diesel::result::Error::BrokenTransactionManager)?;
 
         all_user(&mut conn)
     })

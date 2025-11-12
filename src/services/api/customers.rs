@@ -1,12 +1,9 @@
 use actix_web::{get, put, delete, web, HttpResponse, Responder, post};
-use crate::{DbPool, models::customers::usecases::NewCategoryBody, models::customers::CustomerCategory};
-
-const API_PREFIX: &str = "/customers";
-const _API_TAG: &str = "customers"; // TODO
+use crate::{DbPool, models::customers::usecases::NewCategoryBody, models::customers::CustomerCategory, constants};
 
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope(API_PREFIX)
+        web::scope(constants::paths::CUSTOMERS)
         .service(categories)
         .service(insert_category)
         .service(update_category)
@@ -17,8 +14,8 @@ pub fn config(cfg: &mut web::ServiceConfig) {
 
 #[utoipa::path(
     post,
-    tag = "customers", // TODO
-    context_path = "/api/customers", // TODO
+    tag = constants::tags::CUSTOMERS,
+    context_path = "/api/customers",
     request_body = NewCategoryBody,
     responses(
         (status = 200, description = "customer category insert successfully"),
@@ -37,8 +34,12 @@ pub async fn insert_category(
     form: web::Json<NewCategoryBody>
 ) -> actix_web::Result<impl Responder> {
     use crate::models::customers::usecases::*;
-    let category = web::block(move || {
-        let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let category = web::block(move || -> Result<CustomerCategory, crate::errors::ServiceError> {
+        let mut conn = pool.get()
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to get database connection");
+                crate::errors::ServiceError::InternalServerError
+            })?;
 
         insert_new_category(&mut conn, &form.name)
     })
@@ -54,8 +55,8 @@ pub async fn insert_category(
 
 #[utoipa::path(
     put,
-    tag = "customers", // TODO
-    context_path = "/api/customers", // TODO
+    tag = constants::tags::CUSTOMERS,
+    context_path = "/api/customers",
     request_body = NewCategoryBody,
     responses(
         (status = 200, description = "customer category update successfully"),
@@ -78,8 +79,12 @@ pub async fn update_category(
 
     let category_id = path.into_inner();
 
-    let category = web::block(move || {
-        let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let category = web::block(move || -> Result<CustomerCategory, crate::errors::ServiceError> {
+        let mut conn = pool.get()
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to get database connection");
+                crate::errors::ServiceError::InternalServerError
+            })?;
 
         update_category(&mut conn, category_id, &form.name)
     })
@@ -95,8 +100,8 @@ pub async fn update_category(
 
 #[utoipa::path(
     get,
-    tag = "customers", // TODO
-    context_path = "/api/customers", // TODO
+    tag = constants::tags::CUSTOMERS,
+    context_path = "/api/customers",
     responses(
         (status = 200, description = "customer category list", body = Vec<CustomerCategory>),
         (status = INTERNAL_SERVER_ERROR, description = "failed to get customer categories"),
@@ -113,8 +118,12 @@ pub async fn categories(
 ) -> actix_web::Result<impl Responder> {
     use crate::models::customers::usecases::*;
 
-    let categories = web::block(move || {
-        let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let categories = web::block(move || -> Result<Vec<CustomerCategory>, crate::errors::ServiceError> {
+        let mut conn = pool.get()
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to get database connection");
+                crate::errors::ServiceError::InternalServerError
+            })?;
 
         all_categories(&mut conn)
     })
@@ -130,8 +139,8 @@ pub async fn categories(
 
 #[utoipa::path(
     get,
-    tag = "customers", // TODO
-    context_path = "/api/customers", // TODO
+    tag = constants::tags::CUSTOMERS,
+    context_path = "/api/customers",
     responses(
         (status = 200, description = "customer category detail", body = CustomerCategory),
         (status = INTERNAL_SERVER_ERROR, description = "failed to get category detail"),
@@ -150,8 +159,12 @@ pub async fn get_category(
     use crate::models::customers::usecases::*;
     let category_id = path.into_inner();
 
-    let category = web::block(move || {
-        let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let category = web::block(move || -> Result<CustomerCategory, crate::errors::ServiceError> {
+        let mut conn = pool.get()
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to get database connection");
+                crate::errors::ServiceError::InternalServerError
+            })?;
 
         get_category(&mut conn, category_id)
     })
@@ -167,8 +180,8 @@ pub async fn get_category(
 
 #[utoipa::path(
     delete,
-    tag = "customers", // TODO
-    context_path = "/api/customers", // TODO
+    tag = constants::tags::CUSTOMERS,
+    context_path = "/api/customers",
     responses(
         (status = 200, description = "delete customer category", body = CustomerCategory),
         (status = INTERNAL_SERVER_ERROR, description = "failed to delete customer category"),
@@ -187,8 +200,12 @@ pub async fn delete_category(
     use crate::models::customers::usecases::*;
     let category_id = path.into_inner();
 
-    let category = web::block(move || {
-        let mut conn = pool.get().expect("couldn't get db connection from pool");
+    let category = web::block(move || -> Result<CustomerCategory, crate::errors::ServiceError> {
+        let mut conn = pool.get()
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to get database connection");
+                crate::errors::ServiceError::InternalServerError
+            })?;
 
         destroy_category(&mut conn, category_id)
     })

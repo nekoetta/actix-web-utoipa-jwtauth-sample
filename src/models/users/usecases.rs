@@ -23,12 +23,34 @@ pub fn insert_new_user(conn: &mut DbConnection, uid: String,
         last_name: Option<String>,
         email: Option<String>,
         gecos: Option<String>
-    ) -> diesel::QueryResult<User> {
+    ) -> Result<User, crate::errors::ServiceError> {
         use crate::metrics::{DbMetrics, DurationTimer};
+        use crate::traits::IntoValidator;
+        use validator::Validate;
 
         // Requirements: 12.5 - Database metrics collection
         let timer = DurationTimer::new();
         DbMetrics::record_query("insert_user");
+
+        // Create temporary user for validation
+        // Requirements: 11.2 - Input validation
+        let temp_user = User {
+            id: 0, // Temporary ID for validation
+            login_id: uid.clone(),
+            employee_number,
+            first_name: first_name.clone(),
+            last_name: last_name.clone(),
+            email: email.clone(),
+            gecos: gecos.clone(),
+        };
+
+        // Validate user data before insertion
+        temp_user.validator()
+            .validate()
+            .map_err(|e| {
+                tracing::warn!(error = ?e, "User validation failed");
+                crate::errors::ServiceError::ValidationError { value: e }
+            })?;
 
         // Create insertion model
         let new_user = NewUser {
@@ -44,7 +66,10 @@ pub fn insert_new_user(conn: &mut DbConnection, uid: String,
         let user = diesel::insert_into(dsl::users)
             .values(&new_user)
             .get_result(conn)
-            .expect("Error inserting person");
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Database error during user insertion");
+                crate::errors::ServiceError::InternalServerError
+            })?;
 
         // Record query duration
         DbMetrics::record_duration("insert_user", timer.elapsed_secs());
@@ -65,8 +90,7 @@ pub fn find_user(
 
     let user = dsl::users
         .find(&user_id)
-        .first(conn)
-        .expect("user not found");
+        .first(conn)?;
 
     // Record query duration
     DbMetrics::record_duration("find_user", timer.elapsed_secs());

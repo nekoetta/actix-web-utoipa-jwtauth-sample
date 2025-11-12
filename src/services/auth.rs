@@ -4,9 +4,7 @@ use jsonwebtoken::{encode, Header, EncodingKey};
 use serde::Deserialize;
 use tracing::Instrument;
 use utoipa::{IntoParams, ToSchema};
-use crate::{DbPool, models::users::User, middleware::UserClaims, config};
-
-const _API_TAG: &str = "auth"; // TODO
+use crate::{DbPool, models::users::User, middleware::UserClaims, config, constants};
 
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(login);
@@ -18,9 +16,38 @@ pub struct LoginInfo {
     password: String
 }
 
+use validator::{Validate, ValidationError};
+
+#[derive(Debug, Validate)]
+pub struct LoginInfoValidator {
+    #[validate(length(min = 1, max = 255, message = "ユーザー名は1文字以上255文字以下で入力してください"))]
+    #[validate(custom(function = "validate_username"))]
+    pub username: String,
+    
+    #[validate(length(min = 1, message = "パスワードを入力してください"))]
+    pub password: String,
+}
+
+fn validate_username(username: &str) -> Result<(), ValidationError> {
+    // Check for valid characters (alphanumeric, underscore, hyphen, dot)
+    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.') {
+        return Err(ValidationError::new("invalid_username"));
+    }
+    Ok(())
+}
+
+impl crate::traits::IntoValidator<LoginInfoValidator> for LoginInfo {
+    fn validator(&self) -> LoginInfoValidator {
+        LoginInfoValidator {
+            username: self.username.clone(),
+            password: self.password.clone(),
+        }
+    }
+}
+
 #[utoipa::path(
     post,
-    tag = "auth", // TODO
+    tag = constants::tags::AUTH,
     responses(
         (status = 200, description = "Login User", headers(
             ("authorization" = String, description = "Authorization Header")
@@ -37,6 +64,20 @@ pub async fn login(
     info: web::Json<LoginInfo>
 ) -> actix_web::Result<impl Responder> {
     use ldap3::LdapConnAsync;
+    use crate::traits::IntoValidator;
+    
+    // Validate login info
+    // Requirements: 11.2 - Input validation
+    info.validator()
+        .validate()
+        .map_err(|e| {
+            tracing::warn!(error = ?e, "Login info validation failed");
+            error::ErrorBadRequest(serde_json::json!({
+                "error": "validation_error",
+                "details": e.field_errors()
+            }))
+        })?;
+    
     println!("{:?}", &info);
 
     let config = config::get_config().map_err(|e| {
@@ -121,8 +162,9 @@ pub async fn login(
 
         let cloned_pool = pool.clone();
         let cloned_info = info.clone();
-        let users = web::block(move || {
-            let mut conn = cloned_pool.get().expect("couldn't get db connection from pool");
+        let users = web::block(move || -> Result<Vec<crate::models::users::User>, diesel::result::Error> {
+            let mut conn = cloned_pool.get()
+                .map_err(|_| diesel::result::Error::BrokenTransactionManager)?;
 
             search_user(&mut conn, &cloned_info.username)
         })
@@ -179,8 +221,12 @@ pub async fn login(
             None => {
                 let username_for_log = info.username.clone();
                 tracing::info!(username = %username_for_log, "Creating new user");
-                let user = web::block(move || {
-                    let mut conn = pool.get().expect("couldn't get db connection from pool");
+                let user = web::block(move || -> Result<crate::models::users::User, crate::errors::ServiceError> {
+                    let mut conn = pool.get()
+                        .map_err(|e| {
+                            tracing::error!(error = ?e, "Failed to get database connection");
+                            crate::errors::ServiceError::InternalServerError
+                        })?;
                     insert_new_user(
                         &mut conn,
                         info.username.to_string(),
@@ -194,7 +240,7 @@ pub async fn login(
                 .await?
                 .map_err(|e| {
                     tracing::error!(error = ?e, username = %username_for_log, "Failed to insert new user");
-                    error::ErrorInternalServerError(e)
+                    error::ErrorInternalServerError(format!("{:?}", e))
                 })?;
                 tracing::info!(user_id = %user.id, "New user created successfully");
                 Cow::Owned(user)
@@ -210,9 +256,24 @@ pub async fn login(
                 exp: (chrono::Utc::now() + chrono::Duration::days(7)).timestamp()
             };
 
-        let secret = crate::config::get_config().unwrap().jwt_secret;
-        let secret = secret.split(" ").map(|hex_str| u8::from_str_radix(hex_str, 16).unwrap()).collect::<Vec<u8>>();
-        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(&secret)).expect("Error creating JWT token");
+        let secret = crate::config::get_config()
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to get configuration for JWT");
+                error::ErrorInternalServerError("Configuration error")
+            })?
+            .jwt_secret;
+        let secret = secret.split(" ")
+            .map(|hex_str| u8::from_str_radix(hex_str, 16))
+            .collect::<Result<Vec<u8>, _>>()
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to parse JWT secret");
+                error::ErrorInternalServerError("JWT secret configuration error")
+            })?;
+        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(&secret))
+            .map_err(|e| {
+                tracing::error!(error = ?e, "Failed to encode JWT token");
+                error::ErrorInternalServerError("Token generation error")
+            })?;
 
         tracing::info!(user_id = %user_id, username = %username, "Login successful");
         let mut response = HttpResponse::Ok();
