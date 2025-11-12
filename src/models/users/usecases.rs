@@ -1,5 +1,6 @@
 use diesel::prelude::*;
 use utoipa::ToSchema;
+use tracing::instrument;
 use crate::DbConnection;
 use super::User;
 use crate::schema::users::dsl;
@@ -15,6 +16,7 @@ pub struct NewUser<'a> {
     gecos: Option<&'a str>
 }
 
+#[instrument(skip(conn), fields(db.operation = "insert_user", db.user = %uid))]
 pub fn insert_new_user(conn: &mut DbConnection, uid: String,
         employee_number: Option<i32>,
         first_name: Option<String>,
@@ -22,7 +24,11 @@ pub fn insert_new_user(conn: &mut DbConnection, uid: String,
         email: Option<String>,
         gecos: Option<String>
     ) -> diesel::QueryResult<User> {
+        use crate::metrics::{DbMetrics, DurationTimer};
 
+        // Requirements: 12.5 - Database metrics collection
+        let timer = DurationTimer::new();
+        DbMetrics::record_query("insert_user");
 
         // Create insertion model
         let new_user = NewUser {
@@ -40,37 +46,70 @@ pub fn insert_new_user(conn: &mut DbConnection, uid: String,
             .get_result(conn)
             .expect("Error inserting person");
 
+        // Record query duration
+        DbMetrics::record_duration("insert_user", timer.elapsed_secs());
+
         Ok(user)
     }
 
+#[instrument(skip(conn), fields(db.operation = "find_user", db.user_id = %user_id))]
 pub fn find_user(
     conn: &mut DbConnection,
     user_id: i32
 ) -> diesel::QueryResult<User> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("find_user");
+
     let user = dsl::users
         .find(&user_id)
         .first(conn)
         .expect("user not found");
 
+    // Record query duration
+    DbMetrics::record_duration("find_user", timer.elapsed_secs());
+
     Ok(user)
 }
 
+#[instrument(skip(conn), fields(db.operation = "search_user", db.user = %login_id))]
 pub fn search_user(
     conn: &mut DbConnection,
     login_id: &str
 ) -> diesel::QueryResult<Vec<User>> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("search_user");
+
     let results = dsl::users
         .filter(dsl::login_id.eq(login_id))
         .load::<User>(conn)?;
 
+    // Record query duration
+    DbMetrics::record_duration("search_user", timer.elapsed_secs());
+
     Ok(results)
 }
 
+#[instrument(skip(conn), fields(db.operation = "all_users"))]
 pub fn all_user(
     conn: &mut DbConnection
 ) -> diesel::QueryResult<Vec<User>> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("all_users");
+
     let results = dsl::users
         .load::<User>(conn)?;
+
+    // Record query duration
+    DbMetrics::record_duration("all_users", timer.elapsed_secs());
 
     Ok(results)
 }

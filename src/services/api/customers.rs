@@ -31,6 +31,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
     )
 )]
 #[post("/categories")]
+#[tracing::instrument(skip(pool, form), fields(category.name = %form.name))]
 pub async fn insert_category(
     pool: web::Data<DbPool>,
     form: web::Json<NewCategoryBody>
@@ -41,8 +42,13 @@ pub async fn insert_category(
 
         insert_new_category(&mut conn, &form.name)
     })
-    .await??;
+    .await?
+    .map_err(|e| {
+        tracing::error!(error = ?e, "Failed to insert category");
+        e
+    })?;
 
+    tracing::info!("Category inserted successfully");
     Ok(HttpResponse::Ok().json(category))
 }
 
@@ -62,6 +68,7 @@ pub async fn insert_category(
     )
 )]
 #[put("/categories/{id}/edit")]
+#[tracing::instrument(skip(pool, form), fields(category.id = %path, category.name = %form.name))]
 pub async fn update_category(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
@@ -76,8 +83,13 @@ pub async fn update_category(
 
         update_category(&mut conn, category_id, &form.name)
     })
-    .await??;
+    .await?
+    .map_err(|e| {
+        tracing::error!(error = ?e, category_id = %category_id, "Failed to update category");
+        e
+    })?;
 
+    tracing::info!(category_id = %category_id, "Category updated successfully");
     Ok(HttpResponse::Ok().json(category))
 }
 
@@ -95,6 +107,7 @@ pub async fn update_category(
     )
 )]
 #[get("/categories")]
+#[tracing::instrument(skip(pool))]
 pub async fn categories(
     pool: web::Data<DbPool>,
 ) -> actix_web::Result<impl Responder> {
@@ -105,8 +118,13 @@ pub async fn categories(
 
         all_categories(&mut conn)
     })
-    .await??;
+    .await?
+    .map_err(|e| {
+        tracing::error!(error = ?e, "Failed to fetch categories");
+        e
+    })?;
 
+    tracing::debug!(count = categories.len(), "Categories fetched successfully");
     Ok(HttpResponse::Ok().json(categories))
 }
 
@@ -124,6 +142,7 @@ pub async fn categories(
     )
 )]
 #[get("/categories/{id}")]
+#[tracing::instrument(skip(pool), fields(category.id = %path))]
 pub async fn get_category(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
@@ -136,8 +155,13 @@ pub async fn get_category(
 
         get_category(&mut conn, category_id)
     })
-    .await??;
+    .await?
+    .map_err(|e| {
+        tracing::error!(error = ?e, category_id = %category_id, "Failed to fetch category");
+        e
+    })?;
 
+    tracing::debug!(category_id = %category_id, "Category fetched successfully");
     Ok(HttpResponse::Ok().json(category))
 }
 
@@ -155,6 +179,7 @@ pub async fn get_category(
     )
 )]
 #[delete("/categories/{id}/delete")]
+#[tracing::instrument(skip(pool), fields(category.id = %path))]
 pub async fn delete_category(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
@@ -167,8 +192,13 @@ pub async fn delete_category(
 
         destroy_category(&mut conn, category_id)
     })
-    .await??;
+    .await?
+    .map_err(|e| {
+        tracing::error!(error = ?e, category_id = %category_id, "Failed to delete category");
+        e
+    })?;
 
+    tracing::info!(category_id = %category_id, "Category deleted successfully");
     Ok(HttpResponse::Ok().json(category))
 }
 

@@ -1,6 +1,7 @@
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use tracing::instrument;
 use crate::{DbConnection, errors::ServiceError, models::validate, traits::IntoValidator};
 use super::{CustomerCategory, CategoryValidator};
 use crate::schema::customer_categories::dsl;
@@ -22,7 +23,14 @@ pub struct NewCategoryBody {
     pub name: String
 }
 
+#[instrument(skip(conn), fields(db.operation = "insert_category", db.category = %name))]
 pub fn insert_new_category(conn: &mut DbConnection, name: &str) -> Result<CustomerCategory, ServiceError> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("insert_category");
+
     let new_category = NewCategory {
         name
     };
@@ -34,10 +42,20 @@ pub fn insert_new_category(conn: &mut DbConnection, name: &str) -> Result<Custom
         .get_result(conn)
         .map_err(|_e| ServiceError::InternalServerError)?;
 
+    // Record query duration
+    DbMetrics::record_duration("insert_category", timer.elapsed_secs());
+
     Ok(category)
 }
 
+#[instrument(skip(conn), fields(db.operation = "update_category", db.category_id = %id, db.category = %name))]
 pub fn update_category(conn: &mut DbConnection, id: i32, name: &str) -> Result<CustomerCategory, ServiceError> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("update_category");
+
     let customer_category = CustomerCategory {
         id,
         name: name.to_string()
@@ -50,40 +68,73 @@ pub fn update_category(conn: &mut DbConnection, id: i32, name: &str) -> Result<C
         .get_result(conn)
         .map_err(|_e| ServiceError::InternalServerError)?;
 
+    // Record query duration
+    DbMetrics::record_duration("update_category", timer.elapsed_secs());
+
     Ok(category)
 }
 
+#[instrument(skip(conn), fields(db.operation = "all_categories"))]
 pub fn all_categories(
     conn: &mut DbConnection
 ) -> Result<Vec<CustomerCategory>, ServiceError> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("all_categories");
+
     let results = dsl::customer_categories
         .order(dsl::id.asc())
         .load::<CustomerCategory>(conn)
         .map_err(|_e| ServiceError::InternalServerError)?;
 
+    // Record query duration
+    DbMetrics::record_duration("all_categories", timer.elapsed_secs());
+
     Ok(results)
 }
 
+#[instrument(skip(conn), fields(db.operation = "get_category", db.category_id = %id))]
 pub fn get_category(
     conn: &mut DbConnection,
     id: i32
 ) -> Result<CustomerCategory, ServiceError> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("get_category");
+
     let result = dsl::customer_categories
         .find(id)
         .get_result(conn)
         .map_err(|_e| ServiceError::InternalServerError)?;
 
+    // Record query duration
+    DbMetrics::record_duration("get_category", timer.elapsed_secs());
+
     Ok(result)
 }
 
+#[instrument(skip(conn), fields(db.operation = "destroy_category", db.category_id = %id))]
 pub fn destroy_category(
     conn: &mut DbConnection,
     id: i32
 ) -> Result<CustomerCategory, ServiceError> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("destroy_category");
+
     let result = diesel::delete(dsl::customer_categories)
         .filter(dsl::id.eq(id))
         .get_result(conn)
         .map_err(|_e| ServiceError::InternalServerError)?;
+
+    // Record query duration
+    DbMetrics::record_duration("destroy_category", timer.elapsed_secs());
 
     Ok(result)
 }

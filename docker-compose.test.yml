@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: postgres:17-alpine
+    container_name: rust-api-test-db
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: test_db
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

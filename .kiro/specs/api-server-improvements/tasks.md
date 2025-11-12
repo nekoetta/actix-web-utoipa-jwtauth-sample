@@ -5,80 +5,80 @@
   - バージョン互換性を確認して適切なバージョンを選択
   - _Requirements: 12.4, 13.3, 13.4_
 
-- [ ] 2. 設定管理の拡張
-  - [ ] 2.1 Config構造体にOpenTelemetry設定フィールドを追加
+- [x] 2. 設定管理の拡張
+  - [x] 2.1 Config構造体にOpenTelemetry設定フィールドを追加
     - src/config.rsにotel_enabled, otel_endpoint, otel_service_name, otel_service_versionフィールドを追加
     - Option型で定義し、デフォルト値を設定
     - _Requirements: 13.1, 13.2, 13.3, 13.4_
-  - [ ] 2.2 環境変数の読み込みとバリデーション
+  - [x] 2.2 環境変数の読み込みとバリデーション
     - 設定が不正な場合のエラーメッセージを実装
     - _Requirements: 13.5_
 
-- [ ] 3. OpenTelemetryトレーシングの初期化
-  - [ ] 3.1 テレメトリ初期化関数の実装
+- [x] 3. OpenTelemetryトレーシングの初期化
+  - [x] 3.1 テレメトリ初期化関数の実装
     - src/lib.rsにinit_telemetry関数を追加
     - OTLP Exporterの設定とリソース属性の設定
     - tracing-subscriberとの統合
     - _Requirements: 12.4, 14.2_
-  - [ ] 3.2 main.rsでの初期化処理
+  - [x] 3.2 main.rsでの初期化処理
     - サーバー起動前にinit_telemetry()を呼び出し
     - OpenTelemetry無効時は既存のenv_loggerを使用
     - エラーハンドリングとログ出力
     - _Requirements: 13.1, 13.2_
 
-- [ ] 4. HTTPトレーシングミドルウェアの実装
-  - [ ] 4.1 TracingMiddleware構造体の作成
+- [x] 4. HTTPトレーシングミドルウェアの実装
+  - [x] 4.1 TracingMiddleware構造体の作成
     - src/middleware.rsに新しいミドルウェアを追加
     - Transformトレイトの実装
     - _Requirements: 12.1, 14.1_
-  - [ ] 4.2 リクエストスパンの作成
+  - [x] 4.2 リクエストスパンの作成
     - http.method, http.target, http.status_code, http.user_agentを記録
     - リクエストIDの生成と伝播
     - _Requirements: 12.1_
-  - [ ] 4.3 main.rsでミドルウェアを登録
+  - [x] 4.3 main.rsでミドルウェアを登録
     - App::new().wrap(TracingMiddleware)を追加
     - 既存のLoggerミドルウェアとの共存
     - _Requirements: 14.1_
 
-- [ ] 5. データベースクエリトレーシングの追加
-  - [ ] 5.1 usersモジュールのトレーシング
+- [x] 5. データベースクエリトレーシングの追加
+  - [x] 5.1 usersモジュールのトレーシング
     - src/models/users/usecases.rsの各関数に#[instrument]属性を追加
     - db.operation, db.userなどのフィールドを設定
     - _Requirements: 12.2_
-  - [ ] 5.2 customersモジュールのトレーシング
+  - [x] 5.2 customersモジュールのトレーシング
     - src/models/customers/usecases.rsの各関数に#[instrument]属性を追加
     - db.operation, db.categoryなどのフィールドを設定
     - _Requirements: 12.2_
 
-- [ ] 6. 認証処理のトレーシング
-  - [ ] 6.1 JWT検証のトレーシング
+- [x] 6. 認証処理のトレーシング
+  - [x] 6.1 JWT検証のトレーシング
     - src/middleware.rsのvalidate_token関数に#[instrument]属性を追加
     - auth.token_validフィールドを記録
     - _Requirements: 12.1, 14.5_
-  - [ ] 6.2 LDAP認証のトレーシング
+  - [x] 6.2 LDAP認証のトレーシング
     - src/services/auth.rsのlogin関数にトレーシングを追加
     - auth.ldap_bind, auth.user_searchなどのスパンを作成
     - _Requirements: 14.5_
 
-- [ ] 7. エラートレーシングの統合
-  - [ ] 7.1 ServiceErrorへのトレーシング追加
+- [x] 7. エラートレーシングの統合
+  - [x] 7.1 ServiceErrorへのトレーシング追加
     - src/errors.rsのerror_response関数でtracing::error!を使用
     - エラー詳細をスパンに記録
     - _Requirements: 12.3, 14.3_
-  - [ ] 7.2 ハンドラーでのエラー伝播
+  - [x] 7.2 ハンドラーでのエラー伝播
     - 既存のエラーハンドリングを維持しつつトレース情報を追加
     - _Requirements: 14.3_
 
-- [ ] 8. メトリクス収集の実装
-  - [ ] 8.1 HTTPメトリクスの収集
+- [x] 8. メトリクス収集の実装
+  - [x] 8.1 HTTPメトリクスの収集
     - http_requests_total, http_request_duration_seconds, http_requests_in_flightを実装
     - TracingMiddlewareに統合
     - _Requirements: 12.5_
-  - [ ] 8.2 データベースメトリクスの収集
+  - [x] 8.2 データベースメトリクスの収集
     - db_queries_total, db_query_duration_secondsを実装
     - コネクションプールメトリクスの追加
     - _Requirements: 12.5_
-  - [ ] 8.3 認証メトリクスの収集
+  - [x] 8.3 認証メトリクスの収集
     - auth_attempts_total, jwt_validations_totalを実装
     - _Requirements: 12.5_
 

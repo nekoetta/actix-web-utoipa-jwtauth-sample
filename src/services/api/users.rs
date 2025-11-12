@@ -24,6 +24,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
     )
 )]
 #[get("/")]
+#[tracing::instrument(skip(pool, req_data))]
 pub async fn index(
     pool: web::Data<DbPool>,
     req_data: web::ReqData<ApiReqeustData>
@@ -38,7 +39,11 @@ pub async fn index(
         all_user(&mut conn)
     })
     .await?
-    .map_err(error::ErrorInternalServerError)?;
+    .map_err(|e| {
+        tracing::error!(error = ?e, "Failed to fetch users");
+        error::ErrorInternalServerError(e)
+    })?;
 
+    tracing::debug!(count = users.len(), "Users fetched successfully");
     Ok(HttpResponse::Ok().json(users))
 }

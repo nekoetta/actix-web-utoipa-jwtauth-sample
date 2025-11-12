@@ -3,6 +3,7 @@
 diesel::table! {
     customer_categories (id) {
         id -> Int4,
+        #[max_length = 255]
         name -> Varchar,
     }
 }
@@ -19,7 +20,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    customer_categories,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(customer_categories, users,);
