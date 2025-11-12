@@ -1,6 +1,11 @@
 # actix-web api server
 
+Rust製のREST APIサーバー。LDAP認証とJWTトークンベースの認証を実装し、OpenTelemetryによる可観測性をサポートします。
+
 - [actix-web api server](#actix-web-api-server)
+  - [アーキテクチャ概要](#アーキテクチャ概要)
+  - [技術スタック](#技術スタック)
+  - [主な機能](#主な機能)
   - [module構造](#module構造)
   - [環境変数](#環境変数)
   - [起動方法(Docker)](#起動方法docker)
@@ -8,7 +13,139 @@
   - [開発方法](#開発方法)
   - [テスト実行方法](#テスト実行方法)
   - [openapi specification生成方法](#openapi-specification生成方法)
+  - [開発ガイドライン](#開発ガイドライン)
+  - [トラブルシューティング](#トラブルシューティング)
   - [TODO](#todo)
+
+## アーキテクチャ概要
+
+本APIサーバーは、レイヤードアーキテクチャを採用しています。
+
+```
+┌─────────────────────────────────────────┐
+│      Presentation Layer                 │
+│  (Actix-web Handlers + Middleware)      │
+│  - JWT認証ミドルウェア                   │
+│  - OpenTelemetryトレーシング             │
+│  - CORS設定                             │
+├─────────────────────────────────────────┤
+│      Application Layer                  │
+│     (Use Cases + Validation)            │
+│  - ビジネスロジック                      │
+│  - 入力バリデーション                    │
+├─────────────────────────────────────────┤
+│         Domain Layer                    │
+│        (Models + Traits)                │
+│  - ドメインモデル定義                    │
+│  - 共通トレイト                         │
+├─────────────────────────────────────────┤
+│      Infrastructure Layer               │
+│  (Diesel + LDAP + OpenTelemetry)        │
+│  - データベースアクセス                  │
+│  - LDAP認証                             │
+│  - テレメトリエクスポート                │
+└─────────────────────────────────────────┘
+```
+
+### 認証フロー
+
+```
+Client → POST /login → LDAP認証 → JWT発行 → Client
+                          ↓
+                    ユーザー情報をDB保存
+                          
+Client → GET /api/* → JWT検証 → ハンドラー実行
+                        ↓
+                   401 Unauthorized (失敗時)
+```
+
+### データフロー
+
+```
+HTTP Request
+    ↓
+Middleware (JWT認証、トレーシング)
+    ↓
+Handler (services/api/*.rs)
+    ↓
+Use Case (models/*/usecases.rs)
+    ↓
+Diesel ORM
+    ↓
+PostgreSQL
+```
+
+## 技術スタック
+
+### コア技術
+
+- **言語**: Rust (Edition 2021)
+- **Webフレームワーク**: Actix-web 4.x
+  - 高性能な非同期Webフレームワーク
+  - ミドルウェアによる認証・ロギング
+- **ORM**: Diesel 2.0
+  - 型安全なクエリビルダー
+  - マイグレーション管理
+- **データベース**: PostgreSQL
+  - r2d2によるコネクションプール管理
+
+### 認証・セキュリティ
+
+- **JWT**: jsonwebtoken
+  - HS256アルゴリズムによるトークン署名
+  - 有効期限7日間
+- **LDAP**: ldap3
+  - Active Directory統合
+  - Simple Bind認証
+- **バリデーション**: validator 0.16
+  - 宣言的なバリデーションルール
+
+### API仕様・ドキュメント
+
+- **OpenAPI**: utoipa 3.x
+  - コードからOpenAPI 3.0仕様を自動生成
+  - Swagger UIによるインタラクティブなドキュメント
+- **Swagger UI**: utoipa-swagger-ui
+  - /swagger-ui/ でアクセス可能
+
+### 可観測性 (Observability)
+
+- **OpenTelemetry**: opentelemetry, opentelemetry-otlp
+  - 分散トレーシング
+  - メトリクス収集
+  - OTLP形式でのエクスポート
+- **ログ**: tracing, tracing-subscriber
+  - 構造化ログ
+  - OpenTelemetryとの統合
+
+### 開発・テスト
+
+- **テスト**: cargo test
+  - ユニットテスト
+  - 統合テスト (tests/)
+- **ホットリロード**: cargo-watch
+  - ファイル変更時の自動再起動
+
+## 主な機能
+
+### 認証機能
+
+- **LDAP認証**: Active Directoryとの統合
+- **JWT認証**: トークンベースのステートレス認証
+- **グループフィルタリング**: 特定グループ(Partner)のログイン拒否
+
+### API機能
+
+- **ユーザー管理**: ユーザー一覧取得
+- **顧客カテゴリ管理**: CRUD操作
+- **バリデーション**: 入力データの検証
+- **エラーハンドリング**: 統一されたエラーレスポンス
+
+### 可観測性
+
+- **分散トレーシング**: HTTPリクエスト、DBクエリ、認証処理のトレース
+- **メトリクス**: リクエスト数、レスポンス時間、エラー率
+- **構造化ログ**: JSON形式のログ出力
 
 ## module構造
 
@@ -41,10 +178,15 @@
 
 .envファイルか実行時環境変数に以下の値を設定してください
 
+### データベース設定
+
 - DATABASE_URL
   - 例: DATABASE_URL=postgres://postgres:P%40ssw0rd@localhost/development
 - TEST_DATABASE_URL
   - 例: TEST_DATABASE_URL=postgres://postgres:P%40ssw0rd@localhost:5433/test
+
+### 認証設定
+
 - JWT_SECRET
   - 例: JWT_SECRET="18 A6 77 73 7F 72 44 6C 26 84 0B 19 75 E0 07 FA 73 A4 A8 82 21 C7 99 AC 0D C6 A5 FE D0 E4 E0 E6"
 - LDAP_URI=ldap://ad.example.com
@@ -52,6 +194,121 @@
 - LDAP_FILTER="(objectCategory=CN=Person*)"
 - LDAP_USER_DN="cn=users,dc=example,dc=com"
 - LDAP_GUARD_FILTER="(objectCategory=CN=Group*)"
+
+### OpenTelemetry設定 (オプション)
+
+OpenTelemetryによる分散トレーシングとメトリクス収集を有効化できます。
+
+- OTEL_ENABLED
+  - OpenTelemetryの有効/無効を制御します
+  - デフォルト: false
+  - 例: OTEL_ENABLED=true
+  
+- OTEL_ENDPOINT
+  - OTLPエクスポーターのエンドポイントURL
+  - デフォルト: http://localhost:4317
+  - 例: OTEL_ENDPOINT=http://jaeger:4317
+  
+- OTEL_SERVICE_NAME
+  - サービス名 (トレースに表示される名前)
+  - デフォルト: rust-api
+  - 例: OTEL_SERVICE_NAME=my-api-server
+  
+- OTEL_SERVICE_VERSION
+  - サービスバージョン
+  - デフォルト: 0.1.0
+  - 例: OTEL_SERVICE_VERSION=1.0.0
+
+#### OpenTelemetryバックエンド設定例
+
+##### Jaegerを使用する場合
+
+docker-composeでJaegerを起動:
+
+```yaml
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+```
+
+環境変数設定:
+```bash
+OTEL_ENABLED=true
+OTEL_ENDPOINT=http://localhost:4317
+OTEL_SERVICE_NAME=rust-api
+```
+
+Jaeger UIにアクセス: http://localhost:16686
+
+##### Grafana Tempoを使用する場合
+
+docker-composeでTempoを起動:
+
+```yaml
+services:
+  tempo:
+    image: grafana/tempo:latest
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml
+    ports:
+      - "4317:4317"    # OTLP gRPC
+      - "3200:3200"    # Tempo HTTP
+```
+
+tempo.yaml設定例:
+```yaml
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/traces
+```
+
+環境変数設定:
+```bash
+OTEL_ENABLED=true
+OTEL_ENDPOINT=http://localhost:4317
+OTEL_SERVICE_NAME=rust-api
+```
+
+##### OpenTelemetry Collectorを使用する場合
+
+より柔軟な設定が必要な場合は、OpenTelemetry Collectorを経由できます:
+
+```yaml
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+```
+
+環境変数設定:
+```bash
+OTEL_ENABLED=true
+OTEL_ENDPOINT=http://localhost:4317
+OTEL_SERVICE_NAME=rust-api
+```
 
 ## 起動方法(Docker)
 
@@ -92,6 +349,491 @@
 1. 以下のコマンドを実行します。  
     ```cargo run --bin generate_openapi_schema```
 2. openapi_schema.json が出力されます
+
+## 開発ガイドライン
+
+### コーディング規約
+
+#### 命名規則
+
+- **関数・変数**: snake_case
+  ```rust
+  fn insert_new_user() { }
+  let user_name = "example";
+  ```
+
+- **型・構造体・Enum**: PascalCase
+  ```rust
+  struct User { }
+  enum ServiceError { }
+  ```
+
+- **定数**: SCREAMING_SNAKE_CASE
+  ```rust
+  const API_PREFIX: &str = "/api";
+  ```
+
+#### モジュール構成
+
+- **models/**: ドメインモデルとビジネスロジック
+  - `models/{entity}.rs`: 構造体定義
+  - `models/{entity}/usecases.rs`: CRUD操作とビジネスロジック
+
+- **services/**: APIエンドポイント
+  - `services/auth.rs`: 認証不要なエンドポイント
+  - `services/api/*.rs`: 認証必須なエンドポイント
+
+#### エラーハンドリング
+
+- `expect()` の使用を避け、`?` 演算子を使用する
+  ```rust
+  // ❌ 避けるべき
+  let conn = pool.get().expect("couldn't get db connection");
+  
+  // ✅ 推奨
+  let conn = pool.get()?;
+  ```
+
+- カスタムエラー型 `ServiceError` を使用
+  ```rust
+  pub enum ServiceError {
+      InternalServerError,
+      ValidationError { value: ValidationErrors }
+  }
+  ```
+
+#### バリデーション
+
+- `validator` クレートを使用した宣言的バリデーション
+  ```rust
+  #[derive(Validate)]
+  pub struct CategoryValidator {
+      #[validate(length(max = 255, message = "顧客分類は255文字以下で入力してください"))]
+      pub name: String,
+  }
+  ```
+
+- `IntoValidator` トレイトを実装
+  ```rust
+  impl IntoValidator<CategoryValidator> for CustomerCategory {
+      fn validator(&self) -> CategoryValidator {
+          CategoryValidator { name: self.name.clone() }
+      }
+  }
+  ```
+
+#### データベースアクセス
+
+- Dieselの型安全なクエリビルダーを使用
+  ```rust
+  use crate::schema::users::dsl::*;
+  
+  users
+      .filter(login_id.eq(user_login_id))
+      .first::<User>(conn)
+  ```
+
+- トランザクションを適切に使用
+  ```rust
+  conn.transaction::<_, diesel::result::Error, _>(|conn| {
+      // 複数の操作
+      Ok(())
+  })
+  ```
+
+### OpenTelemetryトレーシングの追加方法
+
+#### 1. Use Case関数へのトレーシング追加
+
+`#[instrument]` 属性を使用して、関数の実行をトレースします。
+
+```rust
+use tracing::instrument;
+
+#[instrument(skip(conn), fields(db.operation = "insert_user"))]
+pub fn insert_new_user(
+    conn: &mut DbConnection,
+    user: NewUser,
+) -> QueryResult<User> {
+    // 実装
+}
+```
+
+**パラメータ説明**:
+- `skip(conn)`: トレースに含めないパラメータ (DB接続など)
+- `fields(...)`: カスタム属性の追加
+
+#### 2. ハンドラーへのトレーシング追加
+
+```rust
+use tracing::{info, error};
+
+#[utoipa::path(/* ... */)]
+pub async fn get_users(pool: web::Data<DbPool>) -> Result<impl Responder, ServiceError> {
+    info!("Fetching all users");
+    
+    let result = web::block(move || {
+        let mut conn = pool.get()?;
+        users::usecases::get_all_users(&mut conn)
+    })
+    .await?;
+    
+    info!("Successfully fetched {} users", result.len());
+    Ok(web::Json(result))
+}
+```
+
+#### 3. エラー時のトレーシング
+
+```rust
+match some_operation() {
+    Ok(result) => {
+        tracing::info!("Operation succeeded");
+        result
+    }
+    Err(e) => {
+        tracing::error!("Operation failed: {:?}", e);
+        return Err(ServiceError::InternalServerError);
+    }
+}
+```
+
+#### 4. カスタムスパンの作成
+
+より詳細なトレーシングが必要な場合:
+
+```rust
+use tracing::{info_span, Instrument};
+
+async fn complex_operation() {
+    let span = info_span!("ldap_authentication", user = %username);
+    
+    async {
+        // LDAP認証処理
+        info!("Binding to LDAP server");
+        // ...
+        info!("Searching user in LDAP");
+        // ...
+    }
+    .instrument(span)
+    .await
+}
+```
+
+### API追加の手順
+
+1. **モデル定義** (`models/{entity}.rs`)
+   ```rust
+   #[derive(Queryable, Serialize, ToSchema)]
+   pub struct MyEntity {
+       pub id: i32,
+       pub name: String,
+   }
+   ```
+
+2. **Use Case実装** (`models/{entity}/usecases.rs`)
+   ```rust
+   #[instrument(skip(conn))]
+   pub fn get_all(conn: &mut DbConnection) -> QueryResult<Vec<MyEntity>> {
+       use crate::schema::my_entities::dsl::*;
+       my_entities.load::<MyEntity>(conn)
+   }
+   ```
+
+3. **ハンドラー実装** (`services/api/{entity}.rs`)
+   ```rust
+   #[utoipa::path(
+       get,
+       path = "/api/my-entities",
+       responses(
+           (status = 200, description = "Success", body = [MyEntity])
+       )
+   )]
+   pub async fn get_all(pool: web::Data<DbPool>) -> Result<impl Responder, ServiceError> {
+       // 実装
+   }
+   ```
+
+4. **Swagger定義に追加** (`swagger.rs`)
+   ```rust
+   #[derive(OpenApi)]
+   #[openapi(
+       paths(
+           services::api::my_entities::get_all,
+       ),
+       components(schemas(MyEntity))
+   )]
+   struct ApiDoc;
+   ```
+
+5. **ルーティング登録** (`services/api.rs` または `main.rs`)
+   ```rust
+   .service(
+       web::scope("/api")
+           .service(my_entities::get_all)
+   )
+   ```
+
+6. **テスト作成** (`tests/my_entities.rs`)
+   ```rust
+   #[actix_web::test]
+   async fn test_get_all() {
+       // テスト実装
+   }
+   ```
+
+### テストのベストプラクティス
+
+- **トランザクションテスト**: 自動ロールバックを使用
+  ```rust
+  conn.test_transaction::<_, ServiceError, _>(|conn| {
+      let result = insert_new_entity(conn, data)?;
+      assert_eq!(result.name, "expected");
+      Ok(())
+  })
+  ```
+
+- **統合テスト**: 実際のHTTPリクエストをシミュレート
+  ```rust
+  let app = test::init_service(
+      App::new()
+          .app_data(web::Data::new(pool.clone()))
+          .service(my_handler)
+  ).await;
+  
+  let req = test::TestRequest::get()
+      .uri("/api/endpoint")
+      .to_request();
+  
+  let resp = test::call_service(&app, req).await;
+  assert!(resp.status().is_success());
+  ```
+
+## トラブルシューティング
+
+### よくある問題と解決方法
+
+#### 1. データベース接続エラー
+
+**症状**:
+```
+Error: couldn't get db connection from pool
+```
+
+**原因**:
+- PostgreSQLが起動していない
+- DATABASE_URLが正しく設定されていない
+- コネクションプール枯渇
+
+**解決方法**:
+```bash
+# PostgreSQLの起動確認
+docker ps | grep postgres
+
+# 環境変数の確認
+echo $DATABASE_URL
+
+# .envファイルの確認
+cat .env
+
+# データベース接続テスト
+psql $DATABASE_URL -c "SELECT 1"
+```
+
+#### 2. マイグレーションエラー
+
+**症状**:
+```
+Error: Migration xxx has already been run
+```
+
+**解決方法**:
+```bash
+# マイグレーション状態の確認
+diesel migration list
+
+# マイグレーションのロールバック
+diesel migration revert
+
+# 再度マイグレーション実行
+diesel migration run
+```
+
+#### 3. JWT認証エラー
+
+**症状**:
+```
+401 Unauthorized
+```
+
+**原因**:
+- トークンが無効または期限切れ
+- JWT_SECRETが正しく設定されていない
+- Authorizationヘッダーの形式が不正
+
+**解決方法**:
+```bash
+# JWT_SECRETの確認
+echo $JWT_SECRET
+
+# トークンの確認 (jwt.ioでデコード)
+# Authorizationヘッダーの形式: Bearer <token>
+
+# ログで詳細確認
+RUST_LOG=debug cargo run
+```
+
+#### 4. LDAP認証エラー
+
+**症状**:
+```
+LDAP bind failed
+```
+
+**原因**:
+- LDAPサーバーに接続できない
+- 認証情報が不正
+- LDAP設定が間違っている
+
+**解決方法**:
+```bash
+# LDAP接続テスト
+ldapsearch -H $LDAP_URI -D "cn=user,dc=example,dc=com" -W
+
+# 環境変数の確認
+echo $LDAP_URI
+echo $LDAP_USER_DN
+echo $LDAP_FILTER
+
+# デバッグログで詳細確認
+RUST_LOG=debug cargo run
+```
+
+#### 5. OpenTelemetryエクスポートエラー
+
+**症状**:
+```
+OpenTelemetry trace error occurred
+```
+
+**原因**:
+- OTLPエンドポイントに接続できない
+- Jaeger/Tempoが起動していない
+
+**解決方法**:
+```bash
+# バックエンドの起動確認
+docker ps | grep jaeger
+
+# エンドポイントの確認
+echo $OTEL_ENDPOINT
+
+# OpenTelemetryを無効化して起動
+OTEL_ENABLED=false cargo run
+
+# ネットワーク接続確認
+curl -v http://localhost:4317
+```
+
+#### 6. コンパイルエラー
+
+**症状**:
+```
+error[E0433]: failed to resolve: use of undeclared crate or module
+```
+
+**解決方法**:
+```bash
+# 依存関係の更新
+cargo update
+
+# クリーンビルド
+cargo clean
+cargo build
+
+# Cargo.lockの削除と再生成
+rm Cargo.lock
+cargo build
+```
+
+#### 7. テスト失敗
+
+**症状**:
+```
+test result: FAILED
+```
+
+**解決方法**:
+```bash
+# テストデータベースの確認
+echo $TEST_DATABASE_URL
+
+# テストデータベースのリセット
+diesel database reset --database-url $TEST_DATABASE_URL
+
+# 詳細ログ付きでテスト実行
+RUST_BACKTRACE=1 RUST_LOG=debug cargo test -- --nocapture
+
+# 特定のテストのみ実行
+cargo test test_name -- --nocapture
+```
+
+#### 8. パフォーマンス問題
+
+**症状**:
+- レスポンスが遅い
+- タイムアウトが発生
+
+**解決方法**:
+```bash
+# OpenTelemetryでトレース確認
+# Jaeger UIで遅いクエリを特定
+
+# データベースクエリの最適化
+# EXPLAIN ANALYZEで実行計画確認
+
+# コネクションプール設定の調整
+# Cargo.tomlのr2d2設定を確認
+
+# OpenTelemetryのオーバーヘッド確認
+OTEL_ENABLED=false cargo run  # 無効時と比較
+```
+
+### ログレベルの設定
+
+開発時は詳細なログを出力:
+```bash
+RUST_LOG=debug cargo run
+```
+
+本番環境では警告以上のみ:
+```bash
+RUST_LOG=warn cargo run
+```
+
+モジュール別のログレベル設定:
+```bash
+RUST_LOG=actix_web=info,diesel=debug,my_app=trace cargo run
+```
+
+### デバッグのヒント
+
+1. **RUST_BACKTRACE**: スタックトレースを表示
+   ```bash
+   RUST_BACKTRACE=1 cargo run
+   ```
+
+2. **cargo-expand**: マクロ展開を確認
+   ```bash
+   cargo install cargo-expand
+   cargo expand
+   ```
+
+3. **Swagger UI**: APIの動作確認
+   - http://localhost:8080/swagger-ui/
+
+4. **Jaeger UI**: トレースの確認
+   - http://localhost:16686
 
 ## TODO
 
