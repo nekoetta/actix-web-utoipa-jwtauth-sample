@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. OpenTelemetry依存関係の追加とプロジェクト設定
+- [x] 1. OpenTelemetry依存関係の追加とプロジェクト設定
   - Cargo.tomlにOpenTelemetry関連クレートを追加 (opentelemetry, opentelemetry-otlp, tracing-opentelemetry, tracing-subscriber)
   - バージョン互換性を確認して適切なバージョンを選択
   - _Requirements: 12.4, 13.3, 13.4_

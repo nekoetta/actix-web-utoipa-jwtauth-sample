@@ -1,5 +1,5 @@
 use actix_web::{get, put, delete, web, HttpResponse, Responder, post};
-use crate::{DbPool, models::customers::usecases::NewCategoryBody};
+use crate::{DbPool, models::customers::usecases::NewCategoryBody, models::customers::CustomerCategory};
 
 const API_PREFIX: &str = "/customers";
 const _API_TAG: &str = "customers"; // TODO

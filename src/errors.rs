@@ -5,9 +5,9 @@ use validator::ValidationErrors;
 
 #[derive(Debug, Display, Error, PartialEq)]
 pub enum ServiceError {
-    #[display(fmt = "Internal Server Error")]
+    #[display("Internal Server Error")]
     InternalServerError,
-    #[display(fmt = "Validation Error")]
+    #[display("Validation Error")]
     ValidationError { value: ValidationErrors }
 }
 

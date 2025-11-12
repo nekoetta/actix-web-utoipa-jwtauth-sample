@@ -1,5 +1,5 @@
 use actix_web::{get, web, HttpResponse, Responder, error};
-use crate::{DbPool, middleware::ApiReqeustData};
+use crate::{DbPool, middleware::ApiReqeustData, models::users::User};
 
 const API_PREFIX: &str = "/users";
 const _API_TAG: &str = "users"; // TODO
