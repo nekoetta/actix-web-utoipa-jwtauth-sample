@@ -24,7 +24,7 @@ actix-web-httpauth = "~0"
 env_logger = "~0.11"
 log = "~0"
 envy = "~0"
-jwt-simple = "~0"
+jwt-simple = { version = "~0", default-features = false, features = ["pure-rust"] }
 validator = { version = "~0", features = ["derive"] }
 derive_more = "~2"
 diesel_migrations = "~2"
@@ -39,3 +39,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 time = "0.3"
 uuid = { version = "1.0", features = ["v4"] }
 lazy_static = "1.4"
+
+# Security dependencies
+actix-session = { version = "0.10", features = ["cookie-session"] }
+actix-limitation = "0.5"

@@ -131,16 +131,16 @@
     - LoginInfoのバリデーション追加
     - _Requirements: 11.2_
 
-- [ ] 12. セキュリティ改善
-  - [ ] 12.1 CSRF対策の実装
+- [x] 12. セキュリティ改善
+  - [x] 12.1 CSRF対策の実装
     - actix-web-csrf-tokenクレートの導入検討
     - SameSite Cookie属性の設定
     - _Requirements: 11.2_
-  - [ ] 12.2 レート制限の追加
+  - [x] 12.2 レート制限の追加
     - actix-limitationクレートの導入
     - ログインエンドポイントへのレート制限実装
     - _Requirements: 11.2_
-  - [ ] 12.3 エラーメッセージの改善
+  - [x] 12.3 エラーメッセージの改善
     - 本番環境で詳細情報を隠蔽
     - 環境変数で制御
     - _Requirements: 11.2_

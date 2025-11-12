@@ -21,6 +21,22 @@ pub struct Config {
     pub otel_service_name: Option<String>,
     #[serde(default)]
     pub otel_service_version: Option<String>,
+    
+    // Security configuration
+    #[serde(default)]
+    pub session_secret: Option<String>,
+    #[serde(default)]
+    pub cookie_secure: Option<bool>,
+    #[serde(default)]
+    pub environment: Option<String>,
+    
+    // Rate limiting configuration
+    #[serde(default)]
+    pub rate_limit_enabled: Option<bool>,
+    #[serde(default)]
+    pub rate_limit_requests: Option<usize>,
+    #[serde(default)]
+    pub rate_limit_period_secs: Option<u64>,
 }
 
 pub fn get_config() -> Result<Config, String> {
@@ -39,6 +55,47 @@ impl Config {
     /// Returns whether OpenTelemetry is enabled
     pub fn is_otel_enabled(&self) -> bool {
         self.otel_enabled.unwrap_or(false)
+    }
+    
+    /// Returns the session secret key
+    pub fn get_session_secret(&self) -> Vec<u8> {
+        if let Some(secret) = &self.session_secret {
+            secret.as_bytes().to_vec()
+        } else {
+            // Generate a default secret (should be set in production)
+            b"default-secret-key-change-in-production-32bytes!!".to_vec()
+        }
+    }
+    
+    /// Returns whether cookies should be secure (HTTPS only)
+    pub fn is_cookie_secure(&self) -> bool {
+        self.cookie_secure.unwrap_or_else(|| {
+            // Default to true in production, false in development
+            self.is_production()
+        })
+    }
+    
+    /// Returns whether the environment is production
+    pub fn is_production(&self) -> bool {
+        self.environment
+            .as_ref()
+            .map(|env| env.to_lowercase() == "production")
+            .unwrap_or(false)
+    }
+    
+    /// Returns whether rate limiting is enabled
+    pub fn is_rate_limit_enabled(&self) -> bool {
+        self.rate_limit_enabled.unwrap_or(true)
+    }
+    
+    /// Returns the maximum number of requests allowed per period
+    pub fn get_rate_limit_requests(&self) -> usize {
+        self.rate_limit_requests.unwrap_or(5)
+    }
+    
+    /// Returns the rate limit period in seconds
+    pub fn get_rate_limit_period_secs(&self) -> u64 {
+        self.rate_limit_period_secs.unwrap_or(60)
     }
     
     /// Returns the OpenTelemetry endpoint with default value

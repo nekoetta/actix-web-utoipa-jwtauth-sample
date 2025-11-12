@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use actix_web::{post, web, HttpResponse, Responder, error, http::header};
+use actix_limitation::Limiter;
 use jsonwebtoken::{encode, Header, EncodingKey};
 use serde::Deserialize;
 use tracing::Instrument;
@@ -53,16 +54,59 @@ impl crate::traits::IntoValidator<LoginInfoValidator> for LoginInfo {
             ("authorization" = String, description = "Authorization Header")
         )),
         (status = UNAUTHORIZED),
+        (status = TOO_MANY_REQUESTS, description = "Rate limit exceeded"),
         (status = INTERNAL_SERVER_ERROR, description = "Login User Failed")
     ),
     request_body = LoginInfo
 )]
 #[post("/login")]
-#[tracing::instrument(skip(pool, info), fields(auth.username = %info.username, auth.ldap_bind = tracing::field::Empty, auth.user_search = tracing::field::Empty))]
+#[tracing::instrument(skip(pool, info, limiter, req), fields(auth.username = %info.username, auth.ldap_bind = tracing::field::Empty, auth.user_search = tracing::field::Empty))]
 pub async fn login(
     pool: web::Data<DbPool>,
-    info: web::Json<LoginInfo>
+    info: web::Json<LoginInfo>,
+    limiter: web::Data<Limiter>,
+    req: actix_web::HttpRequest,
 ) -> actix_web::Result<impl Responder> {
+    // Requirements: 11.2 - Rate limiting for login endpoint to prevent brute force attacks
+    let config = config::get_config().map_err(|e| {
+        tracing::error!(error = ?e, "Failed to get configuration");
+        error::ErrorInternalServerError(e)
+    })?;
+    
+    if config.is_rate_limit_enabled() {
+        // Use client IP address for rate limiting
+        let client_ip = req
+            .connection_info()
+            .realip_remote_addr()
+            .unwrap_or("unknown")
+            .to_string();
+        
+        let rate_limit_key = format!("login:{}", client_ip);
+        
+        match limiter.count(&rate_limit_key).await {
+            Ok(status) => {
+                if status.remaining() == 0 {
+                    tracing::warn!(
+                        client_ip = %client_ip,
+                        username = %info.username,
+                        "Rate limit exceeded for login attempt"
+                    );
+                    return Err(error::ErrorTooManyRequests(
+                        "Too many login attempts. Please try again later."
+                    ));
+                }
+                tracing::debug!(
+                    client_ip = %client_ip,
+                    remaining = status.remaining(),
+                    "Rate limit check passed"
+                );
+            }
+            Err(e) => {
+                tracing::error!(error = ?e, "Rate limiter error");
+                // Continue even if rate limiter fails (fail open)
+            }
+        }
+    }
     use ldap3::LdapConnAsync;
     use crate::traits::IntoValidator;
     
@@ -89,7 +133,12 @@ pub async fn login(
     .await
     .map_err(|e| {
         tracing::error!(error = ?e, ldap_uri = %config.ldap_uri, "Failed to connect to LDAP server");
-        error::ErrorInternalServerError(e)
+        // Requirements: 11.2 - Hide detailed error information in production
+        if config.is_production() {
+            error::ErrorInternalServerError("Authentication service unavailable")
+        } else {
+            error::ErrorInternalServerError(format!("LDAP connection failed: {}", e))
+        }
     })?;
 
     ldap3::drive!(conn);
@@ -103,7 +152,12 @@ pub async fn login(
             .await
             .map_err(|e| {
                 tracing::error!(error = ?e, dn = %dn, "LDAP bind failed");
-                error::ErrorInternalServerError(e)
+                // Requirements: 11.2 - Hide detailed error information in production
+                if config.is_production() {
+                    error::ErrorInternalServerError("Authentication failed")
+                } else {
+                    error::ErrorInternalServerError(format!("LDAP bind failed: {}", e))
+                }
             })?;
         Ok::<_, actix_web::Error>(result)
     }
@@ -124,7 +178,12 @@ pub async fn login(
             .await
             .map_err(|e| {
                 tracing::error!(error = ?e, filter = %guard_filter, "LDAP group search failed");
-                error::ErrorInternalServerError(e)
+                // Requirements: 11.2 - Hide detailed error information in production
+                if config.is_production() {
+                    error::ErrorInternalServerError("Authentication service error")
+                } else {
+                    error::ErrorInternalServerError(format!("LDAP group search failed: {}", e))
+                }
             })?
             .0.first().unwrap().to_owned();
 
@@ -147,7 +206,12 @@ pub async fn login(
                 .await
                 .map_err(|e| {
                     tracing::error!(error = ?e, filter = %search_filter, "LDAP user search failed");
-                    error::ErrorInternalServerError(e)
+                    // Requirements: 11.2 - Hide detailed error information in production
+                    if config.is_production() {
+                        error::ErrorInternalServerError("User information retrieval failed")
+                    } else {
+                        error::ErrorInternalServerError(format!("LDAP user search failed: {}", e))
+                    }
                 })?
                 .0.first().unwrap().to_owned();
             Ok::<_, actix_web::Error>(result)
@@ -256,23 +320,39 @@ pub async fn login(
                 exp: (chrono::Utc::now() + chrono::Duration::days(7)).timestamp()
             };
 
-        let secret = crate::config::get_config()
+        let jwt_config = crate::config::get_config()
             .map_err(|e| {
                 tracing::error!(error = ?e, "Failed to get configuration for JWT");
-                error::ErrorInternalServerError("Configuration error")
-            })?
-            .jwt_secret;
-        let secret = secret.split(" ")
+                // Requirements: 11.2 - Hide detailed error information in production
+                if config.is_production() {
+                    error::ErrorInternalServerError("Authentication service error")
+                } else {
+                    error::ErrorInternalServerError(format!("Configuration error: {}", e))
+                }
+            })?;
+        
+        let secret = jwt_config.jwt_secret.split(" ")
             .map(|hex_str| u8::from_str_radix(hex_str, 16))
             .collect::<Result<Vec<u8>, _>>()
             .map_err(|e| {
                 tracing::error!(error = ?e, "Failed to parse JWT secret");
-                error::ErrorInternalServerError("JWT secret configuration error")
+                // Requirements: 11.2 - Hide detailed error information in production
+                if config.is_production() {
+                    error::ErrorInternalServerError("Authentication service error")
+                } else {
+                    error::ErrorInternalServerError(format!("JWT secret configuration error: {}", e))
+                }
             })?;
+        
         let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(&secret))
             .map_err(|e| {
                 tracing::error!(error = ?e, "Failed to encode JWT token");
-                error::ErrorInternalServerError("Token generation error")
+                // Requirements: 11.2 - Hide detailed error information in production
+                if config.is_production() {
+                    error::ErrorInternalServerError("Authentication service error")
+                } else {
+                    error::ErrorInternalServerError(format!("Token generation error: {}", e))
+                }
             })?;
 
         tracing::info!(user_id = %user_id, username = %username, "Login successful");
