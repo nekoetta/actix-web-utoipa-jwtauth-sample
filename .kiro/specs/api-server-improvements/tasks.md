@@ -1,0 +1,199 @@
+# Implementation Plan
+
+- [ ] 1. OpenTelemetry依存関係の追加とプロジェクト設定
+  - Cargo.tomlにOpenTelemetry関連クレートを追加 (opentelemetry, opentelemetry-otlp, tracing-opentelemetry, tracing-subscriber)
+  - バージョン互換性を確認して適切なバージョンを選択
+  - _Requirements: 12.4, 13.3, 13.4_
+
+- [ ] 2. 設定管理の拡張
+  - [ ] 2.1 Config構造体にOpenTelemetry設定フィールドを追加
+    - src/config.rsにotel_enabled, otel_endpoint, otel_service_name, otel_service_versionフィールドを追加
+    - Option型で定義し、デフォルト値を設定
+    - _Requirements: 13.1, 13.2, 13.3, 13.4_
+  - [ ] 2.2 環境変数の読み込みとバリデーション
+    - 設定が不正な場合のエラーメッセージを実装
+    - _Requirements: 13.5_
+
+- [ ] 3. OpenTelemetryトレーシングの初期化
+  - [ ] 3.1 テレメトリ初期化関数の実装
+    - src/lib.rsにinit_telemetry関数を追加
+    - OTLP Exporterの設定とリソース属性の設定
+    - tracing-subscriberとの統合
+    - _Requirements: 12.4, 14.2_
+  - [ ] 3.2 main.rsでの初期化処理
+    - サーバー起動前にinit_telemetry()を呼び出し
+    - OpenTelemetry無効時は既存のenv_loggerを使用
+    - エラーハンドリングとログ出力
+    - _Requirements: 13.1, 13.2_
+
+- [ ] 4. HTTPトレーシングミドルウェアの実装
+  - [ ] 4.1 TracingMiddleware構造体の作成
+    - src/middleware.rsに新しいミドルウェアを追加
+    - Transformトレイトの実装
+    - _Requirements: 12.1, 14.1_
+  - [ ] 4.2 リクエストスパンの作成
+    - http.method, http.target, http.status_code, http.user_agentを記録
+    - リクエストIDの生成と伝播
+    - _Requirements: 12.1_
+  - [ ] 4.3 main.rsでミドルウェアを登録
+    - App::new().wrap(TracingMiddleware)を追加
+    - 既存のLoggerミドルウェアとの共存
+    - _Requirements: 14.1_
+
+- [ ] 5. データベースクエリトレーシングの追加
+  - [ ] 5.1 usersモジュールのトレーシング
+    - src/models/users/usecases.rsの各関数に#[instrument]属性を追加
+    - db.operation, db.userなどのフィールドを設定
+    - _Requirements: 12.2_
+  - [ ] 5.2 customersモジュールのトレーシング
+    - src/models/customers/usecases.rsの各関数に#[instrument]属性を追加
+    - db.operation, db.categoryなどのフィールドを設定
+    - _Requirements: 12.2_
+
+- [ ] 6. 認証処理のトレーシング
+  - [ ] 6.1 JWT検証のトレーシング
+    - src/middleware.rsのvalidate_token関数に#[instrument]属性を追加
+    - auth.token_validフィールドを記録
+    - _Requirements: 12.1, 14.5_
+  - [ ] 6.2 LDAP認証のトレーシング
+    - src/services/auth.rsのlogin関数にトレーシングを追加
+    - auth.ldap_bind, auth.user_searchなどのスパンを作成
+    - _Requirements: 14.5_
+
+- [ ] 7. エラートレーシングの統合
+  - [ ] 7.1 ServiceErrorへのトレーシング追加
+    - src/errors.rsのerror_response関数でtracing::error!を使用
+    - エラー詳細をスパンに記録
+    - _Requirements: 12.3, 14.3_
+  - [ ] 7.2 ハンドラーでのエラー伝播
+    - 既存のエラーハンドリングを維持しつつトレース情報を追加
+    - _Requirements: 14.3_
+
+- [ ] 8. メトリクス収集の実装
+  - [ ] 8.1 HTTPメトリクスの収集
+    - http_requests_total, http_request_duration_seconds, http_requests_in_flightを実装
+    - TracingMiddlewareに統合
+    - _Requirements: 12.5_
+  - [ ] 8.2 データベースメトリクスの収集
+    - db_queries_total, db_query_duration_secondsを実装
+    - コネクションプールメトリクスの追加
+    - _Requirements: 12.5_
+  - [ ] 8.3 認証メトリクスの収集
+    - auth_attempts_total, jwt_validations_totalを実装
+    - _Requirements: 12.5_
+
+- [ ] 9. 仕様書ドキュメントの作成
+  - [ ] 9.1 システムアーキテクチャドキュメント
+    - .kiro/specs/api-server-improvements/architecture.mdを作成
+    - レイヤー構造、モジュール構成、データフローを記述
+    - _Requirements: 15.1_
+  - [ ] 9.2 認証フロードキュメント
+    - LDAP認証とJWT認証の詳細フローを記述
+    - シーケンス図を含める
+    - _Requirements: 15.2_
+  - [ ] 9.3 データモデルドキュメント
+    - ER図とテーブル定義を記述
+    - リレーションシップと制約を明記
+    - _Requirements: 15.3_
+  - [ ] 9.4 APIエンドポイント一覧
+    - 全エンドポイントの一覧と説明を記述
+    - リクエスト/レスポンス例を含める
+    - _Requirements: 15.4_
+
+- [ ] 10. READMEの改善
+  - [ ] 10.1 OpenTelemetry設定セクションの追加
+    - 環境変数の説明を追加
+    - Jaeger/Tempoなどのバックエンド設定例を記述
+    - _Requirements: 15.5_
+  - [ ] 10.2 アーキテクチャ概要の追加
+    - システム構成図を追加
+    - 技術スタックの説明を拡充
+    - _Requirements: 15.1_
+  - [ ] 10.3 開発ガイドラインの追加
+    - コーディング規約を記述
+    - トレーシングの追加方法を説明
+    - _Requirements: 15.1_
+  - [ ] 10.4 トラブルシューティングセクション
+    - よくある問題と解決方法を記述
+    - _Requirements: 15.5_
+
+- [ ] 11. コード品質改善
+  - [ ] 11.1 expect()の置き換え
+    - pool.get().expect()を?演算子に置き換え
+    - 適切なエラーハンドリングを実装
+    - _Requirements: 11.1_
+  - [ ] 11.2 定数の一元管理
+    - API_TAG, API_PREFIXなどの定数を使用
+    - src/constants.rsモジュールの作成を検討
+    - _Requirements: 11.1_
+  - [ ] 11.3 入力バリデーションの拡充
+    - Userモデルのバリデーション追加
+    - LoginInfoのバリデーション追加
+    - _Requirements: 11.2_
+
+- [ ] 12. セキュリティ改善
+  - [ ] 12.1 CSRF対策の実装
+    - actix-web-csrf-tokenクレートの導入検討
+    - SameSite Cookie属性の設定
+    - _Requirements: 11.2_
+  - [ ] 12.2 レート制限の追加
+    - actix-limitationクレートの導入
+    - ログインエンドポイントへのレート制限実装
+    - _Requirements: 11.2_
+  - [ ] 12.3 エラーメッセージの改善
+    - 本番環境で詳細情報を隠蔽
+    - 環境変数で制御
+    - _Requirements: 11.2_
+
+- [ ] 13. パフォーマンス改善
+  - [ ] 13.1 ページネーションの実装
+    - 一覧取得APIにLIMIT/OFFSETを追加
+    - クエリパラメータでpage, per_pageを受け取る
+    - _Requirements: 11.1_
+  - [ ] 13.2 インデックスの追加
+    - 検索頻度の高いカラムにインデックスを追加
+    - マイグレーションファイルを作成
+    - _Requirements: 11.4_
+
+- [ ] 14. テストの拡充
+  - [ ] 14.1 ミドルウェアのユニットテスト
+    - TracingMiddlewareのテスト追加
+    - JWT検証ミドルウェアのテスト拡充
+    - _Requirements: 10.1, 10.2_
+  - [ ] 14.2 エラーケースのテスト
+    - 各エンドポイントのエラーケーステスト追加
+    - バリデーションエラーのテスト拡充
+    - _Requirements: 10.1, 10.5_
+  - [ ] 14.3 LDAPモックの実装
+    - テスト用のLDAPモックサーバー実装
+    - 認証テストの改善
+    - _Requirements: 10.1_
+
+- [ ] 15. OpenTelemetry動作確認
+  - [ ] 15.1 ローカル環境でのテスト
+    - Jaegerをdocker-composeで起動
+    - トレースデータの送信確認
+    - Swagger UIからAPIを実行してトレースを確認
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+  - [ ] 15.2 メトリクスの確認
+    - Prometheusエクスポーターの動作確認
+    - 各メトリクスが正しく収集されているか確認
+    - _Requirements: 12.5_
+  - [ ] 15.3 パフォーマンステスト
+    - OpenTelemetry有効/無効でのパフォーマンス比較
+    - オーバーヘッドの測定
+    - _Requirements: 13.2_
+
+- [ ] 16. ドキュメントの最終レビューと統合
+  - [ ] 16.1 全ドキュメントの整合性確認
+    - README、architecture.md、design.mdの内容を確認
+    - 矛盾や不足がないかチェック
+    - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
+  - [ ] 16.2 日本語ドキュメントの品質確認
+    - 誤字脱字のチェック
+    - 技術用語の統一
+    - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
+  - [ ] 16.3 英語版ドキュメントの作成
+    - README.enの作成
+    - 国際的なプロジェクトへの対応
+    - _Requirements: 15.5_
