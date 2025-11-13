@@ -1093,6 +1093,37 @@ RUST_LOG=actix_web=info,diesel=debug,my_app=trace cargo run
 4. **Jaeger UI**: トレースの確認
    - http://localhost:16686
 
+## OpenTelemetry動作確認
+
+OpenTelemetry統合の動作確認とパフォーマンステストについては、以下のドキュメントを参照してください：
+
+### クイックスタート
+
+```bash
+# 自動テストスクリプトで全ての確認を実行
+./test-otel.sh
+
+# メトリクス収集の確認
+./verify-metrics.sh
+
+# パフォーマンス比較ベンチマーク
+./benchmark-otel.sh
+```
+
+### 詳細ドキュメント
+
+- **[OTEL_TESTING.md](OTEL_TESTING.md)** - OpenTelemetry動作確認の包括的ガイド
+- **[MANUAL_OTEL_TEST.md](MANUAL_OTEL_TEST.md)** - 手動テスト手順
+- **[METRICS_SETUP.md](METRICS_SETUP.md)** - メトリクス収集とPrometheus統合
+- **[PERFORMANCE_TEST.md](PERFORMANCE_TEST.md)** - パフォーマンステストガイド
+- **[OTEL_VERIFICATION_SUMMARY.md](OTEL_VERIFICATION_SUMMARY.md)** - 動作確認完了サマリー
+
+### 主要なURL
+
+- **Jaeger UI**: http://localhost:16686 - トレースの確認
+- **Swagger UI**: http://localhost:8080/swagger-ui/ - API仕様とテスト
+- **API Server**: http://localhost:8080
+
 ## TODO
 
   tag, context_pathに定数を指定する。 <https://github.com/juhaku/utoipa/issues/518>

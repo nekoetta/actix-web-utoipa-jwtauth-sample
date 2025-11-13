@@ -169,17 +169,17 @@
     - 認証テストの改善
     - _Requirements: 10.1_
 
-- [ ] 15. OpenTelemetry動作確認
-  - [ ] 15.1 ローカル環境でのテスト
+- [x] 15. OpenTelemetry動作確認
+  - [x] 15.1 ローカル環境でのテスト
     - Jaegerをdocker-composeで起動
     - トレースデータの送信確認
     - Swagger UIからAPIを実行してトレースを確認
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
-  - [ ] 15.2 メトリクスの確認
+  - [x] 15.2 メトリクスの確認
     - Prometheusエクスポーターの動作確認
     - 各メトリクスが正しく収集されているか確認
     - _Requirements: 12.5_
-  - [ ] 15.3 パフォーマンステスト
+  - [x] 15.3 パフォーマンステスト
     - OpenTelemetry有効/無効でのパフォーマンス比較
     - オーバーヘッドの測定
     - _Requirements: 13.2_
