@@ -137,3 +137,28 @@ pub fn all_user(
 
     Ok(results)
 }
+
+#[instrument(skip(conn), fields(db.operation = "all_users_paginated", page = %page, per_page = %per_page))]
+pub fn all_user_paginated(
+    conn: &mut DbConnection,
+    page: i64,
+    per_page: i64
+) -> diesel::QueryResult<Vec<User>> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    // Requirements: 11.1 - Pagination implementation
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("all_users_paginated");
+
+    let offset = (page - 1) * per_page;
+    let results = dsl::users
+        .limit(per_page)
+        .offset(offset)
+        .load::<User>(conn)?;
+
+    // Record query duration
+    DbMetrics::record_duration("all_users_paginated", timer.elapsed_secs());
+
+    Ok(results)
+}

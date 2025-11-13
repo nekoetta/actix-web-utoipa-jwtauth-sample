@@ -1,4 +1,5 @@
 use actix_web::{get, put, delete, web, HttpResponse, Responder, post};
+use serde::Deserialize;
 use crate::{DbPool, models::customers::usecases::NewCategoryBody, models::customers::CustomerCategory, constants};
 
 pub fn config(cfg: &mut web::ServiceConfig) {
@@ -10,6 +11,12 @@ pub fn config(cfg: &mut web::ServiceConfig) {
         .service(get_category)
         .service(delete_category)
     );
+}
+
+#[derive(Deserialize)]
+pub struct PaginationParams {
+    page: Option<i64>,
+    per_page: Option<i64>,
 }
 
 #[utoipa::path(
@@ -102,6 +109,10 @@ pub async fn update_category(
     get,
     tag = constants::tags::CUSTOMERS,
     context_path = "/api/customers",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number (default: 1)"),
+        ("per_page" = Option<i64>, Query, description = "Items per page (default: 20)")
+    ),
     responses(
         (status = 200, description = "customer category list", body = Vec<CustomerCategory>),
         (status = INTERNAL_SERVER_ERROR, description = "failed to get customer categories"),
@@ -112,11 +123,16 @@ pub async fn update_category(
     )
 )]
 #[get("/categories")]
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, pagination))]
 pub async fn categories(
     pool: web::Data<DbPool>,
+    pagination: web::Query<PaginationParams>
 ) -> actix_web::Result<impl Responder> {
     use crate::models::customers::usecases::*;
+
+    // Requirements: 11.1 - Pagination with query parameters
+    let page = pagination.page.unwrap_or(1).max(1);
+    let per_page = pagination.per_page.unwrap_or(20).clamp(1, 100);
 
     let categories = web::block(move || -> Result<Vec<CustomerCategory>, crate::errors::ServiceError> {
         let mut conn = pool.get()
@@ -125,7 +141,11 @@ pub async fn categories(
                 crate::errors::ServiceError::InternalServerError
             })?;
 
-        all_categories(&mut conn)
+        if pagination.page.is_some() || pagination.per_page.is_some() {
+            all_categories_paginated(&mut conn, page, per_page)
+        } else {
+            all_categories(&mut conn)
+        }
     })
     .await?
     .map_err(|e| {
@@ -133,7 +153,7 @@ pub async fn categories(
         e
     })?;
 
-    tracing::debug!(count = categories.len(), "Categories fetched successfully");
+    tracing::debug!(count = categories.len(), page = page, per_page = per_page, "Categories fetched successfully");
     Ok(HttpResponse::Ok().json(categories))
 }
 

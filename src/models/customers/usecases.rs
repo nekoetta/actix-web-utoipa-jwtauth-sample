@@ -95,6 +95,33 @@ pub fn all_categories(
     Ok(results)
 }
 
+#[instrument(skip(conn), fields(db.operation = "all_categories_paginated", page = %page, per_page = %per_page))]
+pub fn all_categories_paginated(
+    conn: &mut DbConnection,
+    page: i64,
+    per_page: i64
+) -> Result<Vec<CustomerCategory>, ServiceError> {
+    use crate::metrics::{DbMetrics, DurationTimer};
+
+    // Requirements: 12.5 - Database metrics collection
+    // Requirements: 11.1 - Pagination implementation
+    let timer = DurationTimer::new();
+    DbMetrics::record_query("all_categories_paginated");
+
+    let offset = (page - 1) * per_page;
+    let results = dsl::customer_categories
+        .order(dsl::id.asc())
+        .limit(per_page)
+        .offset(offset)
+        .load::<CustomerCategory>(conn)
+        .map_err(|_e| ServiceError::InternalServerError)?;
+
+    // Record query duration
+    DbMetrics::record_duration("all_categories_paginated", timer.elapsed_secs());
+
+    Ok(results)
+}
+
 #[instrument(skip(conn), fields(db.operation = "get_category", db.category_id = %id))]
 pub fn get_category(
     conn: &mut DbConnection,
