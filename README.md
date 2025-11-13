@@ -2,6 +2,8 @@
 
 Rust製のREST APIサーバー。LDAP認証とJWTトークンベースの認証を実装し、OpenTelemetryによる可観測性をサポートします。
 
+> **English version**: [README.en.md](README.en.md)
+
 - [actix-web api server](#actix-web-api-server)
   - [アーキテクチャ概要](#アーキテクチャ概要)
   - [技術スタック](#技術スタック)
@@ -313,8 +315,11 @@ OTEL_SERVICE_NAME=rust-api
 ## 起動方法(Docker)
 
 1. Docker Desktopなど、docker, docker-composeが使える環境があるか確認してください
-2. 以下のコマンドで起動します。  
-    ```docker-compose -f docker-compose.yml -f docker-compose.services.yml```
+2. 環境変数を設定します（.envファイルを作成）
+3. 以下のコマンドで起動します。  
+    ```bash
+    docker compose up -d
+    ```
 
 ## 起動方法(Dockerを使用しない)
 
