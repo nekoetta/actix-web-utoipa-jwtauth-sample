@@ -14,7 +14,8 @@ pub fn create_connection_pool() -> DbPool {
         .expect("Failed to create database connection pool - check DATABASE_URL")
 }
 
-#[cfg(test)]
+// Test helper function - always available but only used in tests
+// This is exported publicly so integration tests can use it
 pub fn create_test_connection_pool() -> DbPool {
     let config = config::get_config().expect("Failed to load test configuration");
 
@@ -23,16 +24,23 @@ pub fn create_test_connection_pool() -> DbPool {
         .build(manager)
         .expect("Failed to create test database connection pool - check TEST_DATABASE_URL");
     let mut conn = pool.get().expect("Failed to get connection from test pool");
-    run_migrations(&mut conn).expect("Failed to run test migrations");
+    run_test_migrations(&mut conn).expect("Failed to run test migrations");
     pool
 }
 
-#[cfg(test)]
-fn run_migrations(connection: &mut impl diesel_migrations::MigrationHarness<diesel::pg::Pg>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+fn run_test_migrations(connection: &mut impl diesel_migrations::MigrationHarness<diesel::pg::Pg>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
-    connection.revert_all_migrations(MIGRATIONS)?;
-    connection.run_pending_migrations(MIGRATIONS)?;
+    
+    // Check if migrations have already been applied
+    let applied_migrations = connection.applied_migrations()?;
+    
+    if applied_migrations.is_empty() {
+        // No migrations applied yet, run them
+        connection.run_pending_migrations(MIGRATIONS)?;
+    }
+    // If migrations are already applied, do nothing
+    
     Ok(())
 }
 

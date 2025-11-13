@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use actix_web::{post, web, HttpResponse, Responder, error, http::header};
 use actix_limitation::Limiter;
 use jsonwebtoken::{encode, Header, EncodingKey};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 use utoipa::{IntoParams, ToSchema};
 use crate::{DbPool, models::users::User, middleware::UserClaims, config, constants};
@@ -11,10 +11,10 @@ pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(login);
 }
 
-#[derive(Clone, Deserialize, IntoParams, ToSchema, Debug)]
+#[derive(Clone, Deserialize, Serialize, IntoParams, ToSchema, Debug)]
 pub struct LoginInfo {
-    username: String,
-    password: String
+    pub username: String,
+    pub password: String
 }
 
 use validator::{Validate, ValidationError};

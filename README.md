@@ -341,8 +341,266 @@ OTEL_SERVICE_NAME=rust-api
 
 ## テスト実行方法
 
-1. 以下のコマンドを実行します  
-   `RUST_BACKTRACE=1 RUST_LOG=debug cargo test`
+### 前提条件
+
+テストを実行する前に、テスト用のPostgreSQLデータベースを起動してください。
+
+```bash
+# Dockerでテスト用データベースを起動
+docker compose -f docker-compose.test.yml up -d
+
+# データベースが起動したことを確認
+docker ps | grep rust-api-test-db
+```
+
+### 基本的なテスト実行
+
+全てのテストを実行:
+```bash
+cargo test
+```
+
+詳細なログ付きでテスト実行:
+```bash
+RUST_BACKTRACE=1 RUST_LOG=debug cargo test
+```
+
+特定のテストファイルのみ実行:
+```bash
+# JWT認証のテスト
+cargo test --test jwt_auth
+
+# 顧客カテゴリのテスト
+cargo test --test customer_categories
+
+# ユーザーエラーケースのテスト
+cargo test --test users_error_cases
+
+# 認証エラーケースのテスト
+cargo test --test auth_error_cases
+
+# LDAPモックのテスト
+cargo test --test ldap_mock_tests
+```
+
+特定のテスト関数のみ実行:
+```bash
+cargo test test_jwt_auth_wrapper -- --nocapture
+```
+
+### テストカバレッジの計測
+
+#### 初回セットアップ
+
+```bash
+# cargo-llvm-covのインストール
+cargo install cargo-llvm-cov
+
+# LLVMツールのインストール
+rustup component add llvm-tools-preview
+```
+
+#### カバレッジレポートの生成
+
+テキスト形式でカバレッジを表示:
+```bash
+cargo llvm-cov --test jwt_auth --test customer_categories --test users_error_cases --test auth_error_cases --test ldap_mock_tests -- --test-threads=1
+```
+
+HTML形式でカバレッジレポートを生成:
+```bash
+cargo llvm-cov --test jwt_auth --test customer_categories --test users_error_cases --test auth_error_cases --test ldap_mock_tests --html -- --test-threads=1
+```
+
+HTMLレポートは `target/llvm-cov/html/index.html` に生成されます。ブラウザで開いて確認できます:
+```bash
+# Linuxの場合
+xdg-open target/llvm-cov/html/index.html
+
+# macOSの場合
+open target/llvm-cov/html/index.html
+
+# Windowsの場合
+start target/llvm-cov/html/index.html
+```
+
+JSON形式でカバレッジを出力（CI/CD用）:
+```bash
+cargo llvm-cov --test jwt_auth --test customer_categories --test users_error_cases --test auth_error_cases --test ldap_mock_tests --json --output-path coverage.json -- --test-threads=1
+```
+
+LCOV形式でカバレッジを出力（他のツールとの連携用）:
+```bash
+cargo llvm-cov --test jwt_auth --test customer_categories --test users_error_cases --test auth_error_cases --test ldap_mock_tests --lcov --output-path lcov.info -- --test-threads=1
+```
+
+### テストスイート概要
+
+本プロジェクトには以下のテストスイートがあります（合計42テスト）:
+
+| テストスイート | テスト数 | 説明 |
+|--------------|---------|------|
+| **jwt_auth** | 11 | JWT認証ミドルウェア、トレーシングミドルウェア、リクエストデータ作成のテスト |
+| **customer_categories** | 8 | 顧客カテゴリAPIのエラーケース、バリデーション、認証テスト |
+| **users_error_cases** | 6 | ユーザーAPIのエラーケース、ページネーションテスト |
+| **auth_error_cases** | 7 | 認証エンドポイントのバリデーション、エラーハンドリングテスト |
+| **ldap_mock_tests** | 10 | LDAP認証ロジック、JWT生成、ユーザー作成フローのテスト |
+
+### カバレッジ目標
+
+現在のカバレッジ状況:
+
+- **全体カバレッジ**: 58.18%
+- **ミドルウェア**: 87.29% ✅
+- **データモデル**: 100% ✅
+- **APIエンドポイント**: 73-83% ✅
+- **認証サービス**: 27.56% ⚠️ (LDAP依存のため)
+
+詳細なカバレッジレポートは `test-coverage-report.md` を参照してください。
+
+### テストのベストプラクティス
+
+#### 1. データベーステスト
+
+テストでは自動的にマイグレーションが実行され、各テストで新しいデータベース状態が使用されます:
+
+```rust
+#[actix_web::test]
+async fn test_insert_category() {
+    let pool = rust_api::create_test_connection_pool();
+    // テストコード
+}
+```
+
+#### 2. 認証が必要なエンドポイントのテスト
+
+JWT トークンを生成してテスト:
+
+```rust
+fn create_valid_token() -> String {
+    let claims = UserClaims {
+        id: 1,
+        username: "testuser".into(),
+        exp: (chrono::Utc::now() + chrono::Duration::days(7)).timestamp()
+    };
+    // トークン生成
+}
+
+#[actix_web::test]
+async fn test_protected_endpoint() {
+    let token = create_valid_token();
+    let req = test::TestRequest::get()
+        .uri("/api/protected")
+        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .to_request();
+    // テスト実行
+}
+```
+
+#### 3. エラーケースのテスト
+
+バリデーションエラー、認証エラー、データベースエラーなど、様々なエラーケースをテスト:
+
+```rust
+#[actix_web::test]
+async fn test_validation_error() {
+    let data = NewCategoryBody {
+        name: "a".repeat(256), // 長すぎる名前
+    };
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 400); // Bad Request
+}
+```
+
+### CI/CDでのテスト実行
+
+GitHub Actionsなどでテストを実行する場合の例:
+
+```yaml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+      
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov --test jwt_auth --test customer_categories \
+            --test users_error_cases --test auth_error_cases \
+            --test ldap_mock_tests --lcov --output-path lcov.info \
+            -- --test-threads=1
+        env:
+          DATABASE_URL: postgres://test:test@localhost/test_db
+          TEST_DATABASE_URL: postgres://test:test@localhost/test_db
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
+```
+
+### トラブルシューティング
+
+#### テストデータベースに接続できない
+
+```bash
+# データベースが起動しているか確認
+docker ps | grep rust-api-test-db
+
+# データベースを再起動
+docker compose -f docker-compose.test.yml down
+docker compose -f docker-compose.test.yml up -d
+
+# 接続テスト
+psql postgres://test:test@localhost:5432/test_db -c "SELECT 1"
+```
+
+#### マイグレーションエラー
+
+```bash
+# テストデータベースをリセット
+docker compose -f docker-compose.test.yml down -v
+docker compose -f docker-compose.test.yml up -d
+```
+
+#### 特定のテストが失敗する
+
+```bash
+# 詳細なログを出力して実行
+RUST_BACKTRACE=1 RUST_LOG=debug cargo test test_name -- --nocapture
+
+# 単一スレッドで実行（並行実行の問題を回避）
+cargo test -- --test-threads=1
+```
 
 ## openapi specification生成方法
 
