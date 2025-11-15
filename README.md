@@ -81,7 +81,7 @@ PostgreSQL
 
 ### コア技術
 
-- **言語**: Rust (Edition 2021)
+- **言語**: Rust (Edition 2024)
 - **Webフレームワーク**: Actix-web 4.x
   - 高性能な非同期Webフレームワーク
   - ミドルウェアによる認証・ロギング
@@ -1121,7 +1121,6 @@ OpenTelemetry統合の動作確認とパフォーマンステストについて�
 - **[MANUAL_OTEL_TEST.md](MANUAL_OTEL_TEST.md)** - 手動テスト手順
 - **[METRICS_SETUP.md](METRICS_SETUP.md)** - メトリクス収集とPrometheus統合
 - **[PERFORMANCE_TEST.md](PERFORMANCE_TEST.md)** - パフォーマンステストガイド
-- **[OTEL_VERIFICATION_SUMMARY.md](OTEL_VERIFICATION_SUMMARY.md)** - 動作確認完了サマリー
 
 ### 主要なURL
 
